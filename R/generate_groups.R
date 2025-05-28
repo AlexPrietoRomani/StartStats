@@ -142,15 +142,21 @@
 #' print(grupos_dunnett)
 #' }
 #' @export
+#' @importFrom dplyr %>% filter mutate count select left_join tibble ungroup arrange
+#' @importFrom rlang .data sym
+#' @importFrom agricolae HSD.test duncan.test
+#' @importFrom rstatix games_howell_test dunn_test
+#' @importFrom PMCMRplus multcompLetters
+#' @importFrom DescTools DunnettTest
 generate_groups <- function(
-  data,
-  var_original,
-  var_transformada = NULL,
-  formula_interaccion = "GenTrat",
-  method = c("tukey", "games_howell", "duncan", "dunn", "dunnett"),
-  dunn_p_adjust_method = "bonferroni",
-  control_group = NULL,
-  verbose = TRUE
+    data,
+    var_original,
+    var_transformada = NULL,
+    formula_interaccion = "GenTrat",
+    method = c("tukey", "games_howell", "duncan", "dunn", "dunnett"),
+    dunn_p_adjust_method = "bonferroni",
+    control_group = NULL,
+    verbose = TRUE
 ) {
   # Coerción y validación de argumentos principales
   method <- match.arg(method)
@@ -185,7 +191,7 @@ generate_groups <- function(
   }
 
   # Desagrupar los datos al inicio para evitar problemas con operaciones dplyr
-  data <- dplyr::ungroup(data)
+  data <- ungroup(data)
 
   # Asegurarse de que la variable de interacción sea un factor
   # Es crucial para tapply y las pruebas post-hoc.
@@ -237,14 +243,13 @@ generate_groups <- function(
 
     # Aplicar HSD.test con tryCatch para manejar posibles errores
     tuk_result <- tryCatch({
-      HSD.test(
+      agricolae::HSD.test( # Explicitly calling agricolae::HSD.test
         model_aov,
         trt = trt,
         console = FALSE
       )$groups
     }, error = function(e) {
       warning(paste0("Error en agricolae::HSD.test para '", var_name_for_test, "': ", e$message, ". Asignando grupo 'a' por defecto."))
-      # Fallback: Si la prueba falla, asignar 'a' a todos los grupos.
       means_by_group <- tapply(temp_data[[var_name_for_test]], temp_data[[trt]], mean, na.rm = TRUE)
       return(tibble(
         interaccion = names(means_by_group),
@@ -253,20 +258,24 @@ generate_groups <- function(
       ))
     })
 
-    # Si el resultado del tryCatch es un tibble (significa que se usó el fallback), retornarlo directamente
-    if ("tibble" %in% class(tuk_result)) { return(tuk_result) }
+    # Si el resultado fue el fallback (un tibble ya creado), retornarlo directamente
+    if ("tbl_df" %in% class(tuk_result)) { return(tuk_result) }
 
-    # Procesar el resultado de HSD.test
+    # Procesar el resultado de HSD.test (que es un data.frame base)
+    # y convertirlo explícitamente a tibble para consistencia.
     df <- as.data.frame(tuk_result, stringsAsFactors = FALSE)
-    df$interaccion <- rownames(df) # La columna de interacción está en los rownames
+    df$interaccion <- rownames(df)
 
-    df %>%
-      dplyr::select(
+    # Convertir a tibble ANTES de los pipes dplyr
+    df_tibble <- tibble::as_tibble(df)
+
+    df_tibble %>%
+      select(
         interaccion = interaccion,
-        means = !!sym(var_name_for_test), # Usar el nombre dinámico de la columna de medias
+        means = !!sym(var_name_for_test),
         groups = groups
       ) %>%
-      mutate(interaccion = as.character(interaccion)) # Asegurar que 'interaccion' sea character
+      mutate(interaccion = as.character(interaccion))
   }
 
   # --- Función auxiliar para Games–Howell ---
@@ -274,11 +283,10 @@ generate_groups <- function(
     temp_data <- prepare_data_for_test(data, var_name_for_test, "Games-Howell")
     if (is.null(temp_data)) return(tibble(interaccion = character(0), means = numeric(0), groups = character(0)))
 
-    niveles_activos <- levels(temp_data[[trt]]) # Obtener los niveles activos después del filtrado
+    niveles_activos <- levels(temp_data[[trt]])
 
-    # Realizar Games-Howell test con tryCatch
     gh_raw <- tryCatch({
-      games_howell_test(temp_data, as.formula(paste(var_name_for_test, "~", trt)))
+      rstatix::games_howell_test(temp_data, as.formula(paste(var_name_for_test, "~", trt)))
     }, error = function(e) {
       warning(paste0("Error en rstatix::games_howell_test para '", var_name_for_test, "': ", e$message, ". No se pudieron calcular los p-valores. Asignando grupo 'a' por defecto."))
       # Fallback: Si la prueba falla, retornar un tibble con medias y grupo 'a'
@@ -290,7 +298,6 @@ generate_groups <- function(
       ))
     })
 
-    # Si gh_raw no contiene las columnas esperadas (fallback activado), retornar el tibble de fallback.
     if (!all(c("group1", "group2", "p.adj") %in% colnames(gh_raw))) { return(gh_raw) }
 
     # Inicializar la matriz M con 1s (no significativo) para todos los pares
@@ -305,12 +312,12 @@ generate_groups <- function(
 
       # Asegurar que el p-valor no sea NA y que los grupos existan antes de asignar
       if (is.na(p)) {
-          if (verbose) warning(paste0("P-valor NA encontrado para el par (", g1, ", ", g2, ") en '", var_name_for_test, "'. Saltando este par."))
-          next
+        if (verbose) warning(paste0("P-valor NA encontrado para el par (", g1, ", ", g2, ") en '", var_name_for_test, "'. Saltando este par."))
+        next
       }
       if (g1 %in% niveles_activos && g2 %in% niveles_activos) {
         M[g1, g2] <- p
-        M[g2, g1] <- p # La matriz de p-valores es simétrica
+        M[g2, g1] <- p
       } else {
         if (verbose) warning(paste0("Grupo '", g1, "' o '", g2, "' del Games-Howell test no encontrado en los niveles activos para variable '", var_name_for_test, "'. Este par no será considerado en la matriz de p-valores."))
       }
@@ -318,7 +325,7 @@ generate_groups <- function(
 
     # Calcular las letras de agrupamiento usando multcompLetters
     letras <- tryCatch({
-      multcompLetters(M, threshold = 0.05)$Letters
+      PMCMRplus::multcompLetters(M, threshold = 0.05)$Letters
     }, error = function(e) {
       warning(paste0("Error en PMCMRplus::multcompLetters para '", var_name_for_test, "': ", e$message, ". Posiblemente la matriz de p-valores es inválida o singular. Asignando grupo 'a' por defecto."))
       setNames(rep("a", length(niveles_activos)), niveles_activos)
@@ -347,15 +354,15 @@ generate_groups <- function(
 
     # Realizar Dunn test con tryCatch
     dunn_raw <- tryCatch({
-      dunn_test(temp_data, as.formula(paste(var_name_for_test, "~", trt)),
-                p.adjust.method = dunn_p_adjust_method) # Usar el método de ajuste especificado
+      rstatix::dunn_test(temp_data, as.formula(paste(var_name_for_test, "~", trt)),
+                         p.adjust.method = dunn_p_adjust_method)
     }, error = function(e) {
       warning(paste0("Error en rstatix::dunn_test para '", var_name_for_test, "': ", e$message, ". No se pudieron calcular los p-valores. Asignando grupo 'a' por defecto."))
       # Fallback: Si la prueba falla, retornar un tibble con medianas y grupo 'a'
       medians_by_group <- tapply(temp_data[[var_name_for_test]], temp_data[[trt]], median, na.rm = TRUE)
       return(tibble(
         interaccion = names(medians_by_group),
-        means       = unname(medians_by_group), # Usamos 'means' por consistencia, pero es la mediana
+        means       = unname(medians_by_group),
         groups      = rep("a", length(medians_by_group))
       ))
     })
@@ -375,12 +382,12 @@ generate_groups <- function(
 
       # Asegurar que el p-valor no sea NA y que los grupos existan
       if (is.na(p)) {
-          if (verbose) warning(paste0("P-valor NA encontrado para el par (", g1, ", ", g2, ") en '", var_name_for_test, "'. Saltando este par."))
-          next
+        if (verbose) warning(paste0("P-valor NA encontrado para el par (", g1, ", ", g2, ") en '", var_name_for_test, "'. Saltando este par."))
+        next
       }
       if (g1 %in% niveles_activos && g2 %in% niveles_activos) {
         M[g1, g2] <- p
-        M[g2, g1] <- p # La matriz de p-valores es simétrica
+        M[g2, g1] <- p
       } else {
         if (verbose) warning(paste0("Grupo '", g1, "' o '", g2, "' del Dunn test no encontrado en los niveles activos para variable '", var_name_for_test, "'. Este par no será considerado en la matriz de p-valores."))
       }
@@ -388,7 +395,7 @@ generate_groups <- function(
 
     # Calcular las letras de agrupamiento
     letras <- tryCatch({
-      multcompLetters(M, threshold = 0.05)$Letters
+      PMCMRplus::multcompLetters(M, threshold = 0.05)$Letters
     }, error = function(e) {
       warning(paste0("Error en PMCMRplus::multcompLetters para '", var_name_for_test, "': ", e$message, ". Posiblemente la matriz de p-valores es inválida o singular. Asignando grupo 'a' por defecto."))
       setNames(rep("a", length(niveles_activos)), niveles_activos)
@@ -400,7 +407,7 @@ generate_groups <- function(
     # Crear el tibble final
     tibble(
       interaccion = names(letras),
-      means       = unname(medians_by_group[names(letras)]), # Se llama 'means' pero aquí es la mediana
+      means       = unname(medians_by_group[names(letras)]),
       groups      = unname(letras)
     ) %>%
       mutate(interaccion = as.character(interaccion))
@@ -418,7 +425,7 @@ generate_groups <- function(
 
     # Aplicar duncan.test con tryCatch
     duncan_result <- tryCatch({
-      duncan.test(
+      agricolae::duncan.test(
         model_aov,
         trt = trt,
         console = FALSE
@@ -433,13 +440,17 @@ generate_groups <- function(
       ))
     })
 
-    if ("tibble" %in% class(duncan_result)) { return(duncan_result) }
+    # Si el resultado fue el fallback (un tibble ya creado), retornarlo directamente
+    if ("tbl_df" %in% class(duncan_result)) { return(duncan_result) }
 
     df <- as.data.frame(duncan_result, stringsAsFactors = FALSE)
     df$interaccion <- rownames(df)
 
-    df %>%
-      dplyr::select(
+    # Convertir a tibble ANTES de los pipes dplyr
+    df_tibble <- tibble::as_tibble(df)
+
+    df_tibble %>%
+      select(
         interaccion = interaccion,
         means = !!sym(var_name_for_test),
         groups = groups
@@ -456,7 +467,7 @@ generate_groups <- function(
 
     # Asegurarse que el control_group existe en los niveles activos
     if (!control_group %in% levels(temp_data[[trt]])) {
-        stop(paste0("El grupo control '", control_group, "' no existe en los niveles activos de la variable de interacción para '", var_name_for_test, "' después de filtrar NAs."))
+      stop(paste0("El grupo control '", control_group, "' no existe en los niveles activos de la variable de interacción para '", var_name_for_test, "' después de filtrar NAs."))
     }
 
     niveles_activos <- levels(temp_data[[trt]])
@@ -469,8 +480,7 @@ generate_groups <- function(
       # Modelo de ANOVA
       model_aov <- aov(as.formula(paste(var_name_for_test, "~", trt)), data = temp_data)
 
-      # DunnettTest de DescTools devuelve un objeto de clase "PMCMR" que contiene los p-valores
-      DunnettTest(model_aov)$p.value
+      DescTools::DunnettTest(model_aov)$p.value
     }, error = function(e) {
       warning(paste0("Error en DescTools::DunnettTest para '", var_name_for_test, "': ", e$message, ". Asignando grupo 'a' por defecto."))
       means_by_group <- tapply(temp_data[[var_name_for_test]], temp_data[[trt]], mean, na.rm = TRUE)
@@ -484,25 +494,19 @@ generate_groups <- function(
     # Si el resultado del tryCatch no es una matriz (fallback activado), retornar el tibble de fallback.
     if (!is.matrix(dunnett_raw)) { return(dunnett_raw) }
 
-    # La matriz de p-valores de DunnettTest solo compara contra el control.
-    # Para usar multcompLetters, necesitamos una matriz cuadrada con todos los niveles.
-    # Llenamos los valores no comparados con 1 (no significativos).
     M <- matrix(1, nrow = length(niveles_activos), ncol = length(niveles_activos),
                 dimnames = list(niveles_activos, niveles_activos))
 
-    # Poblar la matriz M con los p-valores de Dunnett.
-    # Las columnas de dunnett_raw son los grupos comparados con el control.
     for (group_name in colnames(dunnett_raw)) {
-        p_val <- dunnett_raw[1, group_name] # DunnettTest siempre devuelve una fila para el p-valor
-        if (!is.na(p_val) && control_group %in% niveles_activos && group_name %in% niveles_activos) {
-            M[control_group, group_name] <- p_val
-            M[group_name, control_group] <- p_val # La matriz es simétrica
-        }
+      p_val <- dunnett_raw[1, group_name]
+      if (!is.na(p_val) && control_group %in% niveles_activos && group_name %in% niveles_activos) {
+        M[control_group, group_name] <- p_val
+        M[group_name, control_group] <- p_val
+      }
     }
 
-    # Calcular las letras de agrupamiento
     letras <- tryCatch({
-      multcompLetters(M, threshold = 0.05)$Letters
+      PMCMRplus::multcompLetters(M, threshold = 0.05)$Letters
     }, error = function(e) {
       warning(paste0("Error en PMCMRplus::multcompLetters para '", var_name_for_test, "': ", e$message, ". Posiblemente la matriz de p-valores es inválida o singular. Asignando grupo 'a' por defecto."))
       setNames(rep("a", length(niveles_activos)), niveles_activos)
@@ -550,21 +554,22 @@ generate_groups <- function(
   # --- Combinar resultados manteniendo el formato deseado ---
   # Se hace un left_join desde las medias/medianas de la original hacia los grupos de la transformada
   grupos_final <- grupos_orig %>%
-    dplyr::select(
+    select(
       interaccion,
-      means = means # Tomar las medias/medianas de la variable original
+      means = means
     ) %>%
-    dplyr::left_join(
+    left_join(
       grupos_tr %>%
-        dplyr::select(interaccion, groups = groups), # Tomar los grupos de la variable transformada
+        select(interaccion, groups = groups),
       by = "interaccion"
     ) %>%
-    # Seleccionar y reordenar las columnas finales para la presentación deseada
-    dplyr::select(
+    select(
       interaccion,
       means,
       groups
-    )
+    ) %>%
+    # Asegurar un orden consistente en la salida para facilitar la prueba y el uso
+    arrange(interaccion)
 
   if (verbose) message("Análisis de grupos post-hoc completado.")
   return(grupos_final)

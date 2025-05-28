@@ -1,0 +1,21 @@
+Package: StartStats
+Type: Package
+Title: Funciones para Análisis Estadísticos en Agronomía
+Version: 0.0.0.9000
+Authors@R:
+    person(given = "Alex",
+            family = "Prieto Romani",
+            role = c("aut", "cre"), # aut = autor, cre = creator/mantenedor
+            email = "alexprieto1997@gmail.com")
+Description: Este paquete contiene funciones personalizadas para análisis estadísticos en agronomía, incluyendo detección y manejo de outliers, y pruebas post-hoc avanzadas.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+Imports: 
+    agricolae,
+    DescTools,
+    dplyr,
+    PMCMRplus,
+    rstatix
+RoxygenNote: 7.3.2

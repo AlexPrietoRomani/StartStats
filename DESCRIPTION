@@ -16,8 +16,13 @@ Imports:
     agricolae,
     DescTools,
     dplyr,
+    forcats,
+    ggpattern,
+    ggplot2,
     PMCMRplus,
-    rstatix
+    rstatix,
+    tidytext,
+    viridis
 RoxygenNote: 7.3.2
 Suggests: 
     testthat (>= 3.0.0)

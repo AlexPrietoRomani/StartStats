@@ -148,7 +148,7 @@
 #' @importFrom rstatix games_howell_test dunn_test
 #' @importFrom PMCMRplus multcompLetters
 #' @importFrom DescTools DunnettTest
-#' @importFrom stats as.formula aov relevel # Asegurar que anova para ARTool se despache de stats::anova
+
 generate_groups <- function(
     data,
     var_original,

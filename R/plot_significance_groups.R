@@ -141,8 +141,8 @@
 #'
 #' @export
 #' @importFrom ggplot2 ggplot aes labs theme_minimal theme element_text element_rect element_line coord_cartesian facet_wrap ggsave
-#' @import ggpattern # Importar paquete completo
-#' @import viridis   # Importar paquete completo
+#' @import ggpattern
+#' @import viridis
 #' @importFrom forcats fct_reorder
 #' @importFrom dplyr %>% mutate
 #' @importFrom rlang .data

@@ -268,7 +268,7 @@ plot_significance_groups <- function(
   # --- Configuración de facetas (si se especifica facet_var) ---
   if (!is.null(facet_var)) {
     p <- p + ggplot2::facet_wrap(
-      as.formula(paste("~", facet_var)), 
+      stats::as.formula(paste("~", facet_var)),
       scales = "free_x" 
     ) +
     tidytext::scale_x_reordered()

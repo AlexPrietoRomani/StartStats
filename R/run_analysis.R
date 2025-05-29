@@ -123,9 +123,8 @@ options(contrasts = c("contr.sum", "contr.poly"))
 #' @importFrom ARTool art
 #' @importFrom tidyr drop_na
 #' @importFrom dplyr %>% select all_of mutate across
-#' @importFrom stats as.formula lm resid shapiro.test kruskal.test anova # anova es genérica
-#' @importFrom stats median mean tapply relevel # Funciones base, no necesitan importación pero se mantienen para claridad
-#' @importFrom rlang .data # .data es de rlang, es buena práctica importarlo
+#' @importFrom rlang .data
+
 run_analysis <- function(
     var_name,
     data,

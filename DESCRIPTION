@@ -13,16 +13,21 @@ Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 Imports: 
-    agricolae,
-    DescTools,
     dplyr,
-    forcats,
-    ggpattern,
-    ggplot2,
-    PMCMRplus,
+    agricolae,
     rstatix,
-    tidytext,
-    viridis
+    PMCMRplus,
+    DescTools,
+    car,
+    nortest,
+    ARTool,
+    tidyr,
+    ggplot2,
+    ggpattern,
+    viridis,
+    forcats,
+    rlang,
+    tidytext
 RoxygenNote: 7.3.2
 Suggests: 
     testthat (>= 3.0.0)

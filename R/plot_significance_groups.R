@@ -142,7 +142,7 @@
 #' @export
 #' @importFrom ggplot2 ggplot aes labs theme_minimal theme element_text element_rect element_line coord_cartesian facet_wrap ggsave
 #' @import ggpattern
-#' @import viridis
+#' @import viridis scale_fill_viridis_d
 #' @importFrom forcats fct_reorder
 #' @importFrom dplyr %>% mutate
 #' @importFrom rlang .data

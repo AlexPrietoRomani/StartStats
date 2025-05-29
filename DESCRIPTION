@@ -1,7 +1,7 @@
 Package: StartStats
 Type: Package
 Title: Funciones para Análisis Estadísticos en Agronomía
-Version: 0.0.0.10
+Version: 0.0.0.11
 Authors@R:
     person(given = "Alex",
             family = "Prieto Romani",

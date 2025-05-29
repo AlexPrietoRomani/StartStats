@@ -107,7 +107,7 @@
 #' # Considera este ejemplo si quieres facetas por algo YA PRESENTE EN df_ejemplo
 #' # Y lo agregas a grupos_rendimiento
 #' df_ejemplo_con_campana <- df_ejemplo %>%
-#'   mutate(campana = rep(c("C1", "C2"), 50)) # Añadir una variable de campaña
+#'   dplyr::mutate(campana = rep(c("C1", "C2"), 50)) # Añadir una variable de campaña
 #'
 #' # Generar grupos para la interacción genotipo:campana
 #' grupos_interaccion <- generate_groups(
@@ -122,7 +122,7 @@
 #' # Esto requiere un poco de procesamiento en la salida de generate_groups
 #' grupos_con_facet <- grupos_interaccion %>%
 #'   tidyr::separate(interaccion, into = c("genotipo_facet", "campana_facet"), sep = ":") %>%
-#'   mutate(genotipo_facet = as.factor(genotipo_facet), campana_facet = as.factor(campana_facet))
+#'   dplyr::mutate(genotipo_facet = as.factor(genotipo_facet), campana_facet = as.factor(campana_facet))
 #'
 #' \dontrun{
 #' plot_significance_groups(
@@ -142,154 +142,137 @@
 #' @importFrom forcats fct_reorder
 #' @importFrom dplyr %>% mutate
 #' @importFrom rlang .data
-#' @importFrom tidytext reorder_within scale_x_reordered # Necesarias para facetas con reordenamiento, aunque el ejemplo base las simplifica
-#' # Nota: tidyr::separate también sería útil para el ejemplo de facetas, pero no es una dependencia directa de la función
+#' @importFrom tidytext reorder_within scale_x_reordered
 plot_significance_groups <- function(
-    data, 
-    facet_var = NULL,
-    reorder_x = TRUE,
-    desc = TRUE,
-    x_label = "",
-    rotation_x_ticks = 90,
-    y_label = "",
-    title = "",
-    text_offset = 0.05,
-    y_lim_percent = 0.1
+  data, 
+  facet_var = NULL,
+  reorder_x = TRUE,
+  desc = TRUE,
+  x_label = "",
+  rotation_x_ticks = 90,
+  y_label = "",
+  title = "",
+  text_offset = 0.05,
+  y_lim_percent = 0.1
 ) {
-    # --- Validaciones iniciales ---
-    required_cols <- c("interaccion", "means", "groups")
-    if (!all(required_cols %in% colnames(data))) {
-        stop(paste0("El dataframe de entrada debe contener las columnas: '", 
-                    paste(setdiff(required_cols, colnames(data)), collapse = "', '"), 
-                    "'. Asegúrate de que sea la salida de `generate_groups`."))
-    }
-    if (!is.null(facet_var) && !(facet_var %in% colnames(data))) {
-        stop("La variable de faceta '", facet_var, "' no se encontró en el dataframe proporcionado.")
-    }
-    
-    # Asegurarse de que 'groups' es un factor para el orden de la leyenda
-    # El orden predeterminado de los niveles de factor para las letras ('a', 'ab', 'b', etc.)
-    # puede ser tricky. Viridis por defecto suele usar un buen orden.
-    data$groups <- as.factor(data$groups)
+  # --- Validaciones iniciales ---
+  required_cols <- c("interaccion", "means", "groups")
+  if (!all(required_cols %in% colnames(data))) {
+    stop(paste0("El dataframe de entrada debe contener las columnas: '", 
+                paste(setdiff(required_cols, colnames(data)), collapse = "', '"), 
+                "'. Asegúrate de que sea la salida de `generate_groups`."))
+  }
+  if (!is.null(facet_var) && !(facet_var %in% colnames(data))) {
+    stop("La variable de faceta '", facet_var, "' no se encontró en el dataframe proporcionado.")
+  }
+  
+  # Asegurarse de que 'groups' es un factor para el orden de la leyenda
+  data$groups <- as.factor(data$groups)
 
-    # --- Reordenamiento condicional de categorías del eje X ---
-    if (reorder_x) {
-        if (!is.null(facet_var)) {
-        # Si hay facetas, usar reorder_within para reordenar dentro de cada faceta
-        # Nota: Esto asume que 'interaccion' puede necesitar ser parseado si es un factor combinado
-        # y que 'facet_var' es una de las partes de esa combinación.
-        # Para la salida típica de generate_groups, 'interaccion' es el factor completo.
-        # Esta lógica se mantiene por si el usuario prepara los datos para facetas de este modo.
-        data <- data %>%
-            dplyr::mutate(
-            interaccion = tidytext::reorder_within(
-                .data$interaccion, 
-                .data$means, 
-                .data[[facet_var]], 
-                # Revertir el orden si desc=TRUE para que fct_reorder lo ordene descendente
-                # O pasar el signo negativo a la media directamente para reordenar
-                # tidytext::reorder_within usa el valor directo, así que negamos si es descendente
-                fun = function(x) if (desc) -mean(x, na.rm = TRUE) else mean(x, na.rm = TRUE)
-            )
-            )
-        } else {
-        # Para ordenamiento global: Usamos fct_reorder
-        data <- data %>%
-            dplyr::mutate(
-            interaccion = forcats::fct_reorder(
-                .data$interaccion, 
-                .data$means, 
-                .desc = desc # Controla la dirección del reordenamiento
-            )
-            )
-        }
-    }
-    
-    # --- Cálculo de límites dinámicos para el eje Y ---
-    max_y <- max(data$means, na.rm = TRUE)
-    # Asegurar que el límite inferior sea 0 o el valor mínimo de las medias si hay negativos
-    min_y_val <- min(0, min(data$means, na.rm = TRUE))
-    upper_y <- max_y * (1 + y_lim_percent)
-    if (max_y < 0) { # Si todas las medias son negativas, ajustar el límite superior
-        upper_y <- max_y * (1 - y_lim_percent) # Un poco más abajo del mínimo (más negativo)
-        min_y_val <- min(data$means, na.rm = TRUE) * (1 + y_lim_percent) # Un poco más abajo (más negativo)
-    }
-    
-    # Posición del texto para las etiquetas de grupo
-    # Asegurar que el texto siempre esté por encima de la barra, incluso si las medias son negativas
-    text_position <- ifelse(data$means >= 0, 
-                            data$means + max_y * text_offset, 
-                            data$means - abs(min_y_val) * text_offset)
-    
-    # --- Creación del gráfico base con ggplot2 ---
-    p <- ggplot2::ggplot(data, ggplot2::aes(
-        x = .data$interaccion, 
-        y = .data$means, 
-        fill = .data$groups
-    )) +
-        # Barras con patrón para un estilo visual distintivo
-        ggpattern::geom_col_pattern(
-        pattern = "stripe",
-        pattern_angle = 45,
-        pattern_density = 0.05,
-        pattern_spacing = 0.02,
-        pattern_key_scale_factor = 0.6,
-        color = "black", # Borde de las barras
-        width = 0.7      # Ancho de las barras
-        ) +
-        # Etiquetas de las letras de significancia
-        ggplot2::geom_text(
-        # 'y' se calcula dinámicamente para que el texto aparezca por encima de la barra
-        ggplot2::aes(y = ifelse(.data$means >= 0, .data$means + max_y * text_offset, .data$means - abs(min_y_val) * text_offset), 
-                    label = .data$groups),
-        vjust = ifelse(data$means >= 0, 0, 1), # Ajuste vertical: 0 para barras positivas (arriba), 1 para negativas (abajo)
-        size = 3, 
-        angle = 0, 
-        color = "black"
-        ) +
-        # Escala de colores para el relleno de las barras, usando Viridis para contraste y accesibilidad
-        viridis::scale_fill_viridis_d(name = "Grupos") +
-        # Etiquetas y título del gráfico
-        ggplot2::labs(
-        title = title,
-        x = x_label,
-        y = y_label
-        ) +
-        # Tema minimalista para un aspecto limpio
-        ggplot2::theme_minimal() +
-        # Personalización del tema para mejorar la presentación
-        ggplot2::theme(
-        axis.text.x = ggplot2::element_text(
-            angle = rotation_x_ticks, # Rotación de las etiquetas del eje X
-            hjust = 0.5, # Ajuste horizontal del texto
-            vjust = 0.5  # Ajuste vertical del texto
-        ),
-        axis.title.x = ggplot2::element_blank(), # Ocultar título del eje X si x_label es vacío
-        panel.border = ggplot2::element_rect(
-            color = "black", 
-            fill = NA, 
-            linewidth = 1
-        ), # Borde alrededor del panel principal
-        panel.grid.major = ggplot2::element_line(
-            color = "#E0E0E0", 
-            linetype = "solid", 
-            linewidth = 0.3
-        ), # Líneas de la grilla principal
-        legend.position = "right" # Posición de la leyenda
-        ) +
-        # Ajuste dinámico del rango del eje Y para incluir espacio para las etiquetas
-        ggplot2::coord_cartesian(ylim = c(min_y_val, upper_y))
-    
-    # --- Configuración de facetas (si se especifica facet_var) ---
+  # --- Reordenamiento condicional de categorías del eje X ---
+  if (reorder_x) {
     if (!is.null(facet_var)) {
-        p <- p + ggplot2::facet_wrap(
-        as.formula(paste("~", facet_var)), # Crear facetas dinámicamente
-        scales = "free_x" # Permitir que cada faceta tenga su propio rango en el eje X
-        ) +
-        # Restablecer etiquetas originales después de reorder_within()
-        # Esto es crucial si reorder_within se usó y genera etiquetas como "valor___facet"
-        tidytext::scale_x_reordered()
+      data <- data %>%
+        dplyr::mutate(
+          interaccion = tidytext::reorder_within(
+            .data$interaccion, 
+            .data$means, 
+            .data[[facet_var]], 
+            fun = function(x) if (desc) -mean(x, na.rm = TRUE) else mean(x, na.rm = TRUE)
+          )
+        )
+    } else {
+      data <- data %>%
+        dplyr::mutate(
+          interaccion = forcats::fct_reorder(
+            .data$interaccion, 
+            .data$means, 
+            .desc = desc 
+          )
+        )
     }
-    
-    return(p)
+  }
+  
+  # --- Cálculo de límites dinámicos para el eje Y ---
+  max_y <- max(data$means, na.rm = TRUE)
+  min_y_val <- min(0, min(data$means, na.rm = TRUE)) # Asegurar que el límite inferior sea 0 o el valor mínimo si hay negativos
+  upper_y <- max_y * (1 + y_lim_percent)
+  if (max_y < 0) { # Si todas las medias son negativas, ajustar el límite superior de forma inversa
+      upper_y <- max_y * (1 - y_lim_percent) 
+      min_y_val <- min(data$means, na.rm = TRUE) * (1 + y_lim_percent)
+  }
+  
+  # Posición del texto para las etiquetas de grupo
+  text_position <- ifelse(data$means >= 0, 
+                          data$means + max_y * text_offset, 
+                          data$means - abs(min_y_val) * text_offset)
+  
+  # --- Creación del gráfico base con ggplot2 ---
+  p <- ggplot2::ggplot(data, ggplot2::aes(
+    x = .data$interaccion, 
+    y = .data$means, 
+    fill = .data$groups
+  )) +
+    # Barras con patrón para un estilo visual distintivo
+    ggpattern::geom_col_pattern(
+      pattern = "stripe",
+      pattern_angle = 45,
+      pattern_density = 0.05,
+      pattern_spacing = 0.02,
+      pattern_key_scale_factor = 0.6,
+      color = "black", 
+      width = 0.7      
+    ) +
+    # Etiquetas de las letras de significancia
+    ggplot2::geom_text(
+      ggplot2::aes(y = text_position, # Usar la posición calculada dinámicamente
+                   label = .data$groups),
+      vjust = ifelse(data$means >= 0, 0, 1), # Ajuste vertical para barras positivas/negativas
+      size = 3, 
+      angle = 0, 
+      color = "black"
+    ) +
+    # Escala de colores para el relleno de las barras, usando Viridis
+    viridis::scale_fill_viridis_d(name = "Grupos") +
+    # Etiquetas y título del gráfico
+    ggplot2::labs(
+      title = title,
+      x = x_label,
+      y = y_label
+    ) +
+    # Tema minimalista para un aspecto limpio
+    ggplot2::theme_minimal() +
+    # Personalización del tema
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(
+        angle = rotation_x_ticks, 
+        hjust = 0.5, 
+        vjust = 0.5  
+      ),
+      axis.title.x = ggplot2::element_blank(), 
+      panel.border = ggplot2::element_rect(
+        color = "black", 
+        fill = NA, 
+        linewidth = 1
+      ), 
+      panel.grid.major = ggplot2::element_line(
+        color = "#E0E0E0", 
+        linetype = "solid", 
+        linewidth = 0.3
+      ), 
+      legend.position = "right" 
+    ) +
+    # Ajuste dinámico del rango del eje Y
+    ggplot2::coord_cartesian(ylim = c(min_y_val, upper_y))
+  
+  # --- Configuración de facetas (si se especifica facet_var) ---
+  if (!is.null(facet_var)) {
+    p <- p + ggplot2::facet_wrap(
+      as.formula(paste("~", facet_var)), 
+      scales = "free_x" 
+    ) +
+    tidytext::scale_x_reordered()
+  }
+  
+  return(p)
 }

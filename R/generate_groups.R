@@ -148,6 +148,7 @@
 #' @importFrom rstatix games_howell_test dunn_test
 #' @importFrom PMCMRplus multcompLetters
 #' @importFrom DescTools DunnettTest
+#' @importFrom stats as.formula aov relevel # Asegurar que anova para ARTool se despache de stats::anova
 generate_groups <- function(
     data,
     var_original,
@@ -226,8 +227,8 @@ generate_groups <- function(
     problem_groups <- group_counts %>% filter(n < 2)
     if (nrow(problem_groups) > 0) {
       warning(paste0("Para la variable '", var_name_for_test, "', los siguientes grupos tienen menos de 2 observaciones válidas (después de filtrar NAs): ",
-                     paste(problem_groups[[trt]], collapse = ", "),
-                     ". Esto puede afectar la prueba ", test_name, " y los resultados de agrupamiento."))
+                      paste(problem_groups[[trt]], collapse = ", "),
+                      ". Esto puede afectar la prueba ", test_name, " y los resultados de agrupamiento."))
     }
 
     return(temp_data)
@@ -569,7 +570,7 @@ generate_groups <- function(
       groups
     ) %>%
     # Asegurar un orden consistente en la salida para facilitar la prueba y el uso
-    arrange(interaccion)
+    dplyr::arrange(interaccion)
 
   if (verbose) message("Análisis de grupos post-hoc completado.")
   return(grupos_final)

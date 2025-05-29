@@ -239,6 +239,14 @@ generate_groups <- function(
     temp_data <- prepare_data_for_test(data, var_name_for_test, "Tukey HSD")
     if (is.null(temp_data)) return(tibble(interaccion = character(0), means = numeric(0), groups = character(0)))
 
+    # Reordenar niveles del factor trt por la media de var_name_for_test (descendente)
+    # Esto asegura que 'a' se asigne al grupo con mayor media.
+    means_order <- temp_data %>%
+      dplyr::group_by(!!rlang::sym(trt)) %>%
+      dplyr::summarise(mean_val = mean(.data[[var_name_for_test]], na.rm = TRUE)) %>%
+      dplyr::arrange(dplyr::desc(mean_val))
+    temp_data[[trt]] <- factor(temp_data[[trt]], levels = means_order[[trt]])
+
     # Modelo de ANOVA
     model_aov <- aov(as.formula(paste(var_name_for_test, "~", trt)), data = temp_data)
 
@@ -284,6 +292,15 @@ generate_groups <- function(
     temp_data <- prepare_data_for_test(data, var_name_for_test, "Games-Howell")
     if (is.null(temp_data)) return(tibble(interaccion = character(0), means = numeric(0), groups = character(0)))
 
+    # Reordenar niveles del factor trt por la media de var_name_for_test (descendente)
+    # Esto asegura que 'a' se asigne al grupo con mayor media.
+    means_order <- temp_data %>%
+      dplyr::group_by(!!rlang::sym(trt)) %>%
+      dplyr::summarise(mean_val = mean(.data[[var_name_for_test]], na.rm = TRUE)) %>%
+      dplyr::arrange(dplyr::desc(mean_val))
+    temp_data[[trt]] <- factor(temp_data[[trt]], levels = means_order[[trt]])
+
+    # levels() devolverá el orden correcto para M
     niveles_activos <- levels(temp_data[[trt]])
 
     gh_raw <- tryCatch({
@@ -351,6 +368,15 @@ generate_groups <- function(
     temp_data <- prepare_data_for_test(data, var_name_for_test, "Dunn Test")
     if (is.null(temp_data)) return(tibble(interaccion = character(0), means = numeric(0), groups = character(0)))
 
+    # Reordenar niveles del factor trt por la MEDIANA de var_name_for_test (descendente)
+    # Esto asegura que 'a' se asigne al grupo con mayor mediana.
+    medians_order <- temp_data %>%
+      dplyr::group_by(!!rlang::sym(trt)) %>%
+      dplyr::summarise(median_val = stats::median(.data[[var_name_for_test]], na.rm = TRUE)) %>%
+      dplyr::arrange(dplyr::desc(median_val))
+    temp_data[[trt]] <- factor(temp_data[[trt]], levels = medians_order[[trt]])
+
+    # Ahora, levels() devolverá el orden correcto
     niveles_activos <- levels(temp_data[[trt]])
 
     # Realizar Dunn test con tryCatch
@@ -421,6 +447,14 @@ generate_groups <- function(
     temp_data <- prepare_data_for_test(data, var_name_for_test, "Duncan Test")
     if (is.null(temp_data)) return(tibble(interaccion = character(0), means = numeric(0), groups = character(0)))
 
+    # Reordenar niveles del factor trt por la media de var_name_for_test (descendente)
+    # Esto asegura que 'a' se asigne al grupo con mayor media.
+    means_order <- temp_data %>%
+      dplyr::group_by(!!rlang::sym(trt)) %>%
+      dplyr::summarise(mean_val = mean(.data[[var_name_for_test]], na.rm = TRUE)) %>%
+      dplyr::arrange(dplyr::desc(mean_val))
+    temp_data[[trt]] <- factor(temp_data[[trt]], levels = means_order[[trt]])
+
     # Modelo de ANOVA
     model_aov <- aov(as.formula(paste(var_name_for_test, "~", trt)), data = temp_data)
 
@@ -471,12 +505,24 @@ generate_groups <- function(
       stop(paste0("El grupo control '", control_group, "' no existe en los niveles activos de la variable de interacción para '", var_name_for_test, "' después de filtrar NAs."))
     }
 
+    # Reordenar niveles del factor trt por la media de var_name_for_test (descendente)
+    # Excluyendo el grupo control del ordenamiento inicial y luego reinsertándolo al principio
+    means_order <- temp_data %>%
+      dplyr::group_by(!!rlang::sym(trt)) %>%
+      dplyr::summarise(mean_val = mean(.data[[var_name_for_test]], na.rm = TRUE)) %>%
+      dplyr::ungroup() %>% # Desagrupar para evitar problemas con arrange/filter
+      dplyr::filter(!!rlang::sym(trt) != control_group) %>% # Filtrar el control_group para ordenar el resto
+      dplyr::arrange(dplyr::desc(mean_val))
+    
+    # Construir el orden final de niveles: control_group primero, luego el resto ordenado
+    ordered_levels <- c(control_group, means_order[[trt]])
+    temp_data[[trt]] <- factor(temp_data[[trt]], levels = ordered_levels)
+
+    # levels() devolverá el orden correcto para M
     niveles_activos <- levels(temp_data[[trt]])
 
     # Realizar Dunnett test con tryCatch
     dunnett_raw <- tryCatch({
-      # DescTools::DunnettTest requiere que el factor tenga el control como primer nivel
-      temp_data[[trt]] <- relevel(temp_data[[trt]], ref = control_group)
 
       # Modelo de ANOVA
       model_aov <- aov(as.formula(paste(var_name_for_test, "~", trt)), data = temp_data)

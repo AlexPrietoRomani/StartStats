@@ -39,6 +39,8 @@
 #'   superior del eje Y, calculado como `max_y * (1 + y_lim_percent)`. Útil para
 #'   asegurar espacio para las etiquetas y evitar que se corten. Un valor de `0.1`
 #'   (10% más) es el valor por defecto.
+#' @param plot_width Un número. Ancho del gráfico en pulgadas. Por defecto es `7`.
+#' @param plot_height Un número. Alto del gráfico en pulgadas. Por defecto es `5`.
 #'
 #' @return Un objeto `ggplot2` que representa el gráfico de barras con las
 #'   letras de significancia. Este objeto puede ser impreso directamente o
@@ -85,6 +87,8 @@
 #'   y_label = "Rendimiento Promedio (kg/ha)",
 #'   x_label = "Genotipo"
 #' )
+#' # Guardar el gráfico con tamaño específico
+#' # ggsave("rendimiento_genotipo.png", last_plot(), width = 8, height = 6, units = "in")
 #' }
 #'
 #' # Ejemplo con faceta (si tu interacción tuviera otra variable)
@@ -136,13 +140,14 @@
 #' }
 #'
 #' @export
-#' @importFrom ggplot2 ggplot aes labs theme_minimal theme element_text element_rect element_line coord_cartesian facet_wrap
-#' @importFrom ggpattern geom_col_pattern
-#' @importFrom viridis scale_fill_viridis_d
+#' @importFrom ggplot2 ggplot aes labs theme_minimal theme element_text element_rect element_line coord_cartesian facet_wrap ggsave
+#' @import ggpattern # Importar paquete completo
+#' @import viridis   # Importar paquete completo
 #' @importFrom forcats fct_reorder
 #' @importFrom dplyr %>% mutate
 #' @importFrom rlang .data
 #' @importFrom tidytext reorder_within scale_x_reordered
+
 plot_significance_groups <- function(
   data, 
   facet_var = NULL,
@@ -153,7 +158,10 @@ plot_significance_groups <- function(
   y_label = "",
   title = "",
   text_offset = 0.05,
-  y_lim_percent = 0.1
+  y_lim_percent = 0.1,
+  plot_width = 7,
+  plot_height = 5,
+  ggsave = FALSE
 ) {
   # --- Validaciones iniciales ---
   required_cols <- c("interaccion", "means", "groups")
@@ -195,9 +203,9 @@ plot_significance_groups <- function(
   
   # --- Cálculo de límites dinámicos para el eje Y ---
   max_y <- max(data$means, na.rm = TRUE)
-  min_y_val <- min(0, min(data$means, na.rm = TRUE)) # Asegurar que el límite inferior sea 0 o el valor mínimo si hay negativos
+  min_y_val <- min(0, min(data$means, na.rm = TRUE)) 
   upper_y <- max_y * (1 + y_lim_percent)
-  if (max_y < 0) { # Si todas las medias son negativas, ajustar el límite superior de forma inversa
+  if (max_y < 0) { 
       upper_y <- max_y * (1 - y_lim_percent) 
       min_y_val <- min(data$means, na.rm = TRUE) * (1 + y_lim_percent)
   }
@@ -213,7 +221,6 @@ plot_significance_groups <- function(
     y = .data$means, 
     fill = .data$groups
   )) +
-    # Barras con patrón para un estilo visual distintivo
     ggpattern::geom_col_pattern(
       pattern = "stripe",
       pattern_angle = 45,
@@ -223,26 +230,22 @@ plot_significance_groups <- function(
       color = "black", 
       width = 0.7      
     ) +
-    # Etiquetas de las letras de significancia
     ggplot2::geom_text(
-      ggplot2::aes(y = text_position, # Usar la posición calculada dinámicamente
+      ggplot2::aes(y = text_position, 
                    label = .data$groups),
-      vjust = ifelse(data$means >= 0, 0, 1), # Ajuste vertical para barras positivas/negativas
+      vjust = ifelse(data$means >= 0, 0, 1), 
       size = 3, 
       angle = 0, 
       color = "black"
     ) +
-    # Escala de colores para el relleno de las barras, usando Viridis
-    viridis::scale_fill_viridis_d(name = "Grupos") +
-    # Etiquetas y título del gráfico
+    # Llamada directa a scale_fill_viridis_d (ahora que viridis se importa completamente)
+    scale_fill_viridis_d(name = "Grupos") + 
     ggplot2::labs(
       title = title,
       x = x_label,
       y = y_label
     ) +
-    # Tema minimalista para un aspecto limpio
     ggplot2::theme_minimal() +
-    # Personalización del tema
     ggplot2::theme(
       axis.text.x = ggplot2::element_text(
         angle = rotation_x_ticks, 
@@ -262,16 +265,21 @@ plot_significance_groups <- function(
       ), 
       legend.position = "right" 
     ) +
-    # Ajuste dinámico del rango del eje Y
     ggplot2::coord_cartesian(ylim = c(min_y_val, upper_y))
   
   # --- Configuración de facetas (si se especifica facet_var) ---
   if (!is.null(facet_var)) {
     p <- p + ggplot2::facet_wrap(
-      stats::as.formula(paste("~", facet_var)),
+      stats::as.formula(paste("~", facet_var)), 
       scales = "free_x" 
     ) +
     tidytext::scale_x_reordered()
+  }
+  
+  # Guardar el gráfico si se especifican plot_width y plot_height
+  if (!is.null(plot_width) && !is.null(plot_height) && !is.null(title) && ggsave) {
+    #Se podría sugerir guardar con un nombre de archivo basado en el título, por ejemplo
+    ggsave(paste0(gsub(" ", "_", title), ".png"), plot = p, width = plot_width, height = plot_height, units = "in")
   }
   
   return(p)

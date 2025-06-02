@@ -37,10 +37,15 @@ Por defecto es "GenTrat" (Genotipo x Tratamiento, un nombre común en agronomía
 Puede ser:
 \itemize{
 \item \code{"tukey"}: Tukey HSD para ANOVA (paramétrica, asume normalidad y homocedasticidad).
+Utiliza \code{agricolae::HSD.test}. Para más detalles, ver Steel et al. (1997).
 \item \code{"games_howell"}: Games-Howell para ANOVA (paramétrica, robusta ante violación de homocedasticidad).
+Utiliza \code{rstatix::games_howell_test}.
 \item \code{"duncan"}: Duncan's Multiple Range Test (paramétrica, compara todos los pares, a menudo más liberal que Tukey).
+Utiliza \code{agricolae::duncan.test}. Para más detalles, ver Steel et al. (1997).
 \item \code{"dunn"}: Dunn's Test (no paramétrica, para Kruskal-Wallis, útil para datos ordinales o no normales). La medida de centralidad en la salida será la mediana.
+Utiliza \code{rstatix::dunn_test}. Para más detalles, ver Dunn (1964).
 \item \code{"dunnett"}: Dunnett's Test (paramétrica, compara múltiples grupos contra un único grupo control). Requiere especificar \code{control_group}.
+Utiliza \code{DescTools::DunnettTest}.
 }
 Por defecto es "tukey".}
 
@@ -70,8 +75,7 @@ según el \code{method} elegido. Para \code{method = "dunnett"}, las letras refl
 la significancia estadística solo en comparación con el \code{control_group}.}
 }
 En caso de que una prueba no pueda realizarse para una variable (ej. no hay suficientes grupos),
-la función intentará manejar el error y devolverá una tabla vacía o asignará el grupo 'a'
-a todas las interacciones, junto con una advertencia.
+la función intentará manejar el error y devolverá una tabla vacía con advertencia.
 }
 \description{
 \code{generate_groups} realiza pruebas post-hoc de comparaciones múltiples
@@ -89,6 +93,13 @@ También "droplevels" los factores para evitar problemas con niveles vacíos.
 Los \code{tryCatch} se usan para aumentar la robustez de la función, permitiendo que
 continúe la ejecución y emita advertencias en lugar de detenerse completamente
 si una prueba post-hoc falla por condiciones inusuales de los datos.
+
+\strong{Referencias:}
+\itemize{
+\item Dunn, O. J. (1964). Multiple comparisons using rank sums. \emph{Technometrics}, 6(3), 241-252.
+\item Steel, R. G. D., Torrie, J. H., & Dickey, D. A. (1997). \emph{Principles and Procedures of Statistics: A Biometrical Approach} (3rd ed.). McGraw-Hill.
+\item Piepho, H. P. (2004). An algorithm for a letter-based representation of all-pairwise comparisons. \emph{Journal of Computational and Graphical Statistics}, 13(2), 456-466.
+}
 }
 \examples{
 # Crear datos de ejemplo

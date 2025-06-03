@@ -1,3 +1,5 @@
+# StartStats\R\run_analysis.R
+
 # Se establecen contrastes sum-to-zero para asegurar sumas de cuadrados tipo III
 # (esencial para car::Anova en modelos desbalanceados o con interacciones).
 options(contrasts = c("contr.sum", "contr.poly"))
@@ -148,7 +150,6 @@ run_analysis <- function(
                              choices = c("quantitative", "ordinal"))
 
   # Construir la fórmula completa del modelo, incluyendo la variable respuesta
-  # CORRECCIÓN AQUÍ: Se añade "~" para formar correctamente la fórmula
   model_formula <- as.formula(paste(var_name, "~", as.character(formula)[2]))
   # Extraer los nombres de las variables predictoras (factores) de la fórmula
   predictors    <- all.vars(as.formula(formula))

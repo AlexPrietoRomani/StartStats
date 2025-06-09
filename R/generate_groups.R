@@ -155,7 +155,7 @@
 #' @export
 #' @importFrom dplyr %>% filter mutate count select left_join tibble ungroup arrange group_by summarise
 #' @importFrom rlang .data sym
-#' @importFrom agricolae HSD.test duncan.test
+#' @importFrom agricolae HSD.test duncan.test LSD.test
 #' @importFrom rstatix games_howell_test dunn_test
 #' @importFrom multcompView multcompLetters
 #' @importFrom DescTools DunnettTest
@@ -250,6 +250,50 @@ generate_groups <- function(
     # Aplicar HSD.test con tryCatch para manejar posibles errores
     tuk_result <- tryCatch({
       agricolae::HSD.test(
+        model_aov,
+        trt = trt,
+        console = FALSE
+      )$groups
+    }, error = function(e) {
+      warning(paste0("Error en agricolae::HSD.test para '", var_name_for_test, "': ", e$message, ". Retornando tabla vacía para los grupos."))
+      return(tibble::tibble(interaccion = character(0), means = numeric(0), groups = character(0)))
+    })
+
+    if ("tbl_df" %in% class(tuk_result)) { return(tuk_result) }
+
+    df <- as.data.frame(tuk_result, stringsAsFactors = FALSE)
+    df$interaccion <- rownames(df)
+
+    df_tibble <- tibble::as_tibble(df)
+
+    df_tibble %>%
+      dplyr::select(
+        interaccion = interaccion,
+        means = !!rlang::sym(var_name_for_test),
+        groups = groups
+      ) %>%
+      dplyr::mutate(interaccion = as.character(interaccion))
+  }
+
+  # --- Función auxiliar para Multicomparación LSD ---
+  get_LSD <- function(var_name_for_test) {
+    temp_data <- prepare_data_for_test(data, var_name_for_test, "Tukey HSD")
+    if (is.null(temp_data)) return(tibble::tibble(interaccion = character(0), means = numeric(0), groups = character(0)))
+
+    # Reordenar niveles del factor trt por la media de var_name_for_test (descendente)
+    means_order <- temp_data %>%
+      dplyr::group_by(!!rlang::sym(trt)) %>%
+      dplyr::summarise(mean_val = mean(.data[[var_name_for_test]], na.rm = TRUE)) %>% # <-- mean sin stats::
+      dplyr::arrange(dplyr::desc(mean_val))
+    temp_data[[trt]] <- factor(temp_data[[trt]], levels = means_order[[trt]])
+
+
+    # Modelo de ANOVA
+    model_aov <- stats::aov(stats::as.formula(paste(var_name_for_test, "~", trt)), data = temp_data)
+
+    # Aplicar HSD.test con tryCatch para manejar posibles errores
+    tuk_result <- tryCatch({
+      agricolae::LSD.test(
         model_aov,
         trt = trt,
         console = FALSE
@@ -565,6 +609,7 @@ generate_groups <- function(
 
   selected_test_helper <- switch(method,
                                  "tukey" = get_tukey,
+                                 "LSD" = get_LSD,
                                  "games_howell" = get_games_howell,
                                  "duncan" = get_duncan,
                                  "dunn" = get_dunn,

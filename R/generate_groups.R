@@ -165,7 +165,7 @@ generate_groups <- function(
     var_original,
     var_transformada = NULL,
     formula_interaccion = "GenTrat",
-    method = c("tukey", "games_howell", "duncan", "dunn", "dunnett"),
+    method = c("tukey", "LSD", "games_howell", "duncan", "dunn", "dunnett"),
     dunn_p_adjust_method = "bonferroni",
     control_group = NULL,
     verbose = TRUE

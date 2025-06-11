@@ -150,7 +150,7 @@ run_analysis <- function(
                              choices = c("quantitative", "ordinal"))
 
   # Construir la fórmula completa del modelo, incluyendo la variable respuesta
-  model_formula <- as.formula(paste(var_name, "~", as.character(formula)[2]))
+  model_formula <- as.formula(paste0(var_name, formula))
   # Extraer los nombres de las variables predictoras (factores) de la fórmula
   predictors    <- all.vars(as.formula(formula))
 
